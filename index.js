@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { MongoClient, ObjectId } from "mongodb";
+import { toNodeHandler } from "better-auth/node";
+import { createAuth } from "./auth.js";
 
 
 dotenv.config();
@@ -11,8 +13,21 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
+
+// Skip JSON parsing for Better Auth requests
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/auth")) {
+    return next();
+  }
+
+  express.json()(req, res, next);
+});
 
 // Test API
 app.get("/", (req, res) => {
@@ -503,9 +518,18 @@ async function startServer() {
 
     app.locals.db = db;
 
+    // Initialize Better Auth
+    const auth = createAuth(db, client);
+
+    // Mount Better Auth routes
+    app.all("/api/auth/{*any}", toNodeHandler(auth));
+
+    console.log("Better Auth Initialized!");
+
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
+
   } catch (error) {
     console.error("MongoDB Connection Failed:", error);
     process.exit(1);
