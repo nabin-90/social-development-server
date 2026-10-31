@@ -1,4 +1,3 @@
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -7,7 +6,6 @@ import { toNodeHandler } from "better-auth/node";
 import { createAuth } from "./auth.js";
 import { verifyToken } from "./middleware/verifyToken.js";
 import validateEvent from "./validators/eventValidator.js";
-
 
 dotenv.config();
 
@@ -19,7 +17,7 @@ app.use(
   cors({
     origin: "http://localhost:3000",
     credentials: true,
-  })
+  }),
 );
 
 // Skip JSON parsing for Better Auth requests
@@ -39,7 +37,6 @@ app.get("/", (req, res) => {
 // Get all events
 
 // Get all upcoming events
-
 
 app.get("/events", async (req, res) => {
   try {
@@ -63,10 +60,9 @@ app.get("/events", async (req, res) => {
 
     // Search by title or location
     if (search && search.trim()) {
-      const escapedSearch = search.trim().replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
+      const escapedSearch = search
+        .trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
       filter.$or = [
         { title: { $regex: escapedSearch, $options: "i" } },
@@ -105,10 +101,6 @@ app.get("/events", async (req, res) => {
   }
 });
 
-
-
-
-
 // Create a new event
 // Create an event (JWT protected)
 app.post("/events", verifyToken, async (req, res) => {
@@ -118,12 +110,12 @@ app.post("/events", verifyToken, async (req, res) => {
     const validation = validateEvent(eventData);
 
     if (!validation.isValid) {
-  return res.status(400).json({
-    success: false,
-    message: "Event validation failed",
-    errors: validation.errors,
-  });
-}
+      return res.status(400).json({
+        success: false,
+        message: "Event validation failed",
+        errors: validation.errors,
+      });
+    }
 
     // Creator identity comes from verified JWT, not request body
     const creatorEmail = req.user.email?.toLowerCase();
@@ -145,9 +137,7 @@ app.post("/events", verifyToken, async (req, res) => {
       createdAt: new Date(),
     };
 
-    const result = await app.locals.db
-      .collection("events")
-      .insertOne(newEvent);
+    const result = await app.locals.db.collection("events").insertOne(newEvent);
 
     res.status(201).json({
       success: true,
@@ -166,7 +156,6 @@ app.post("/events", verifyToken, async (req, res) => {
     });
   }
 });
-
 
 // Get a single event by ID
 app.get("/events/:id", async (req, res) => {
@@ -209,15 +198,14 @@ app.get("/events/:id", async (req, res) => {
   }
 });
 
-
-
 // Update an event (JWT protected, creator only)
 app.put("/events/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const updatedData = req.body;
+    const updatedData = { ...req.body };
     const creatorEmail = req.user.email?.toLowerCase();
 
+    // Validate event ID
     if (!ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
@@ -236,7 +224,40 @@ app.put("/events/:id", verifyToken, async (req, res) => {
     delete updatedData._id;
     delete updatedData.creatorEmail;
 
-    const result = await app.locals.db.collection("events").updateOne(
+    const eventsCollection = app.locals.db.collection("events");
+
+    // Find existing event owned by the logged-in user
+    const existingEvent = await eventsCollection.findOne({
+      _id: new ObjectId(id),
+      creatorEmail,
+    });
+
+    if (!existingEvent) {
+      return res.status(404).json({
+        success: false,
+        message: "Event not found or you are not authorized to update it",
+      });
+    }
+
+    // Merge existing event with updated data
+    const mergedEvent = {
+      ...existingEvent,
+      ...updatedData,
+    };
+
+    // Validate the complete event
+    const validation = validateEvent(mergedEvent);
+
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: "Event validation failed",
+        errors: validation.errors,
+      });
+    }
+
+    // Update event
+    const result = await eventsCollection.updateOne(
       {
         _id: new ObjectId(id),
         creatorEmail,
@@ -246,15 +267,8 @@ app.put("/events/:id", verifyToken, async (req, res) => {
           ...updatedData,
           updatedAt: new Date(),
         },
-      }
+      },
     );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Event not found or you are not authorized to update it",
-      });
-    }
 
     res.status(200).json({
       success: true,
@@ -270,9 +284,7 @@ app.put("/events/:id", verifyToken, async (req, res) => {
   }
 });
 
-
-
-// Delete an event (JWT protected, creator only)
+// Delete an event 
 app.delete("/events/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -304,6 +316,15 @@ app.delete("/events/:id", verifyToken, async (req, res) => {
       });
     }
 
+    // Delete all related joined event records
+    const cleanupResult = await app.locals.db
+      .collection("joinedEvents")
+      .deleteMany({
+        eventId: new ObjectId(id),
+      });
+
+    console.log(`${cleanupResult.deletedCount} joined event records deleted`);
+
     res.status(200).json({
       success: true,
       message: "Event deleted successfully",
@@ -317,8 +338,6 @@ app.delete("/events/:id", verifyToken, async (req, res) => {
     });
   }
 });
-
-
 
 // Join an event (JWT protected)
 app.post("/events/:id/join", verifyToken, async (req, res) => {
@@ -389,6 +408,14 @@ app.post("/events/:id/join", verifyToken, async (req, res) => {
       },
     });
   } catch (error) {
+    // Handle duplicate join error
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "You have already joined this event",
+      });
+    }
+
     console.error("Failed to join event:", error);
 
     res.status(500).json({
@@ -397,8 +424,6 @@ app.post("/events/:id/join", verifyToken, async (req, res) => {
     });
   }
 });
-
-
 
 // Get joined events (JWT protected)
 app.get("/joined-events", verifyToken, async (req, res) => {
@@ -456,7 +481,6 @@ app.get("/joined-events", verifyToken, async (req, res) => {
   }
 });
 
-
 // Get my events (JWT protected)
 app.get("/my-events", verifyToken, async (req, res) => {
   try {
@@ -503,8 +527,6 @@ app.get("/protected-test", verifyToken, (req, res) => {
   });
 });
 
-
-
 // Start server
 const client = new MongoClient(process.env.MONGODB_URI);
 
@@ -517,6 +539,19 @@ async function startServer() {
     console.log("MongoDB Connected Successfully!");
 
     const db = client.db(process.env.DB_NAME);
+
+    // Prevent duplicate event joins
+    await db.collection("joinedEvents").createIndex(
+      {
+        eventId: 1,
+        userEmail: 1,
+      },
+      {
+        unique: true,
+      },
+    );
+
+    console.log("Joined Events Unique Index Created!");
 
     app.locals.db = db;
 
@@ -531,7 +566,6 @@ async function startServer() {
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
-
   } catch (error) {
     console.error("MongoDB Connection Failed:", error);
     process.exit(1);
