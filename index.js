@@ -309,11 +309,13 @@ app.delete("/events/:id", verifyToken, async (req, res) => {
 
 
 
-// Join an event
-app.post("/events/:id/join", async (req, res) => {
+// Join an event (JWT protected)
+app.post("/events/:id/join", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { userEmail } = req.body;
+
+    // Get authenticated user's email from JWT
+    const userEmail = req.user.email?.toLowerCase();
 
     // Validate event ID
     if (!ObjectId.isValid(id)) {
@@ -324,16 +326,15 @@ app.post("/events/:id/join", async (req, res) => {
     }
 
     // Validate user email
-    if (!userEmail || !userEmail.trim()) {
-      return res.status(400).json({
+    if (!userEmail) {
+      return res.status(401).json({
         success: false,
-        message: "User email is required",
+        message: "Authenticated user email is missing",
       });
     }
 
     const db = app.locals.db;
     const eventId = new ObjectId(id);
-    const email = userEmail.trim().toLowerCase();
 
     // Check if event exists
     const event = await db.collection("events").findOne({
@@ -350,7 +351,7 @@ app.post("/events/:id/join", async (req, res) => {
     // Check if user already joined
     const existingJoin = await db.collection("joinedEvents").findOne({
       eventId,
-      userEmail: email,
+      userEmail,
     });
 
     if (existingJoin) {
@@ -363,7 +364,7 @@ app.post("/events/:id/join", async (req, res) => {
     // Save joined event
     const result = await db.collection("joinedEvents").insertOne({
       eventId,
-      userEmail: email,
+      userEmail,
       joinedAt: new Date(),
     });
 
@@ -373,7 +374,7 @@ app.post("/events/:id/join", async (req, res) => {
       data: {
         _id: result.insertedId,
         eventId,
-        userEmail: email,
+        userEmail,
       },
     });
   } catch (error) {
