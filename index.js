@@ -6,6 +6,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import { toNodeHandler } from "better-auth/node";
 import { createAuth } from "./auth.js";
 import { verifyToken } from "./middleware/verifyToken.js";
+import validateEvent from "./validators/eventValidator.js";
 
 
 dotenv.config();
@@ -113,6 +114,16 @@ app.get("/events", async (req, res) => {
 app.post("/events", verifyToken, async (req, res) => {
   try {
     const eventData = req.body;
+
+    const validation = validateEvent(eventData);
+
+    if (!validation.isValid) {
+  return res.status(400).json({
+    success: false,
+    message: "Event validation failed",
+    errors: validation.errors,
+  });
+}
 
     // Creator identity comes from verified JWT, not request body
     const creatorEmail = req.user.email?.toLowerCase();
