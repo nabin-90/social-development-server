@@ -199,14 +199,14 @@ app.get("/events/:id", async (req, res) => {
 });
 
 
-// Update an event by ID
-// Update an event (Only creator can update)
-app.put("/events/:id", async (req, res) => {
+
+// Update an event (JWT protected, creator only)
+app.put("/events/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { creatorEmail, ...updatedData } = req.body;
+    const updatedData = req.body;
+    const creatorEmail = req.user.email?.toLowerCase();
 
-    // Validate event ID
     if (!ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
@@ -214,44 +214,21 @@ app.put("/events/:id", async (req, res) => {
       });
     }
 
-    // Validate creator email
-    if (!creatorEmail || !creatorEmail.trim()) {
-      return res.status(400).json({
+    if (!creatorEmail) {
+      return res.status(401).json({
         success: false,
-        message: "Creator email is required",
+        message: "Authenticated user email is missing",
       });
     }
 
-    const db = app.locals.db;
-    const email = creatorEmail.trim().toLowerCase();
-
-    // Find event and verify ownership
-    const existingEvent = await db.collection("events").findOne({
-      _id: new ObjectId(id),
-    });
-
-    if (!existingEvent) {
-      return res.status(404).json({
-        success: false,
-        message: "Event not found",
-      });
-    }
-
-    if (existingEvent.creatorEmail !== email) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not authorized to update this event",
-      });
-    }
-
-    // Prevent changing creator email and MongoDB ID
+    // Prevent changing ownership or MongoDB ID
     delete updatedData._id;
     delete updatedData.creatorEmail;
 
-    const result = await db.collection("events").updateOne(
+    const result = await app.locals.db.collection("events").updateOne(
       {
         _id: new ObjectId(id),
-        creatorEmail: email,
+        creatorEmail,
       },
       {
         $set: {
@@ -260,6 +237,13 @@ app.put("/events/:id", async (req, res) => {
         },
       }
     );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Event not found or you are not authorized to update it",
+      });
+    }
 
     res.status(200).json({
       success: true,
