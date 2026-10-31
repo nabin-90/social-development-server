@@ -261,14 +261,12 @@ app.put("/events/:id", verifyToken, async (req, res) => {
 
 
 
-// Delete an event by ID
-// Delete an event (Only creator can delete)
-app.delete("/events/:id", async (req, res) => {
+// Delete an event (JWT protected, creator only)
+app.delete("/events/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { creatorEmail } = req.body;
+    const creatorEmail = req.user.email?.toLowerCase();
 
-    // Validate event ID
     if (!ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
@@ -276,48 +274,24 @@ app.delete("/events/:id", async (req, res) => {
       });
     }
 
-    // Validate creator email
-    if (!creatorEmail || !creatorEmail.trim()) {
-      return res.status(400).json({
+    if (!creatorEmail) {
+      return res.status(401).json({
         success: false,
-        message: "Creator email is required",
+        message: "Authenticated user email is missing",
       });
     }
 
-    const email = creatorEmail.trim().toLowerCase();
-
-    const db = app.locals.db;
-
-    // Find event
-    const existingEvent = await db.collection("events").findOne({
+    const result = await app.locals.db.collection("events").deleteOne({
       _id: new ObjectId(id),
+      creatorEmail,
     });
 
-    if (!existingEvent) {
+    if (result.deletedCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "Event not found",
+        message: "Event not found or you are not authorized to delete it",
       });
     }
-
-    // Verify event ownership
-    if (existingEvent.creatorEmail !== email) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not authorized to delete this event",
-      });
-    }
-
-    // Delete event
-    await db.collection("events").deleteOne({
-      _id: new ObjectId(id),
-      creatorEmail: email,
-    });
-
-    // Remove related joined records
-    await db.collection("joinedEvents").deleteMany({
-      eventId: new ObjectId(id),
-    });
 
     res.status(200).json({
       success: true,
