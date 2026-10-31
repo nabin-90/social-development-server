@@ -389,15 +389,16 @@ app.post("/events/:id/join", verifyToken, async (req, res) => {
 
 
 
-// Get all joined events of a user
-app.get("/joined-events", async (req, res) => {
+// Get joined events (JWT protected)
+app.get("/joined-events", verifyToken, async (req, res) => {
   try {
-    const { email } = req.query;
+    // Get authenticated user's email from JWT
+    const email = req.user.email?.toLowerCase();
 
-    if (!email || !email.trim()) {
-      return res.status(400).json({
+    if (!email) {
+      return res.status(401).json({
         success: false,
-        message: "User email is required",
+        message: "Authenticated user email is missing",
       });
     }
 
@@ -406,7 +407,7 @@ app.get("/joined-events", async (req, res) => {
       .aggregate([
         {
           $match: {
-            userEmail: email.trim().toLowerCase(),
+            userEmail: email,
           },
         },
         {
