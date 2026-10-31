@@ -446,22 +446,23 @@ app.get("/joined-events", verifyToken, async (req, res) => {
 });
 
 
-// Get all events created by a user
-app.get("/my-events", async (req, res) => {
+// Get my events (JWT protected)
+app.get("/my-events", verifyToken, async (req, res) => {
   try {
-    const { email } = req.query;
+    // Get authenticated user's email from JWT
+    const email = req.user.email?.toLowerCase();
 
-    if (!email || !email.trim()) {
-      return res.status(400).json({
+    if (!email) {
+      return res.status(401).json({
         success: false,
-        message: "User email is required",
+        message: "Authenticated user email is missing",
       });
     }
 
     const myEvents = await app.locals.db
       .collection("events")
       .find({
-        creatorEmail: email.trim().toLowerCase(),
+        creatorEmail: email,
       })
       .sort({ eventDate: 1 })
       .toArray();
