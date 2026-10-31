@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { MongoClient, ObjectId } from "mongodb";
 import { toNodeHandler } from "better-auth/node";
 import { createAuth } from "./auth.js";
+import { verifyToken } from "./middleware/verifyToken.js";
 
 
 dotenv.config();
@@ -108,21 +109,41 @@ app.get("/events", async (req, res) => {
 
 
 // Create a new event
-app.post("/events", async (req, res) => {
+// Create an event (JWT protected)
+app.post("/events", verifyToken, async (req, res) => {
   try {
     const eventData = req.body;
 
-    // Insert event into MongoDB
+    // Creator identity comes from verified JWT, not request body
+    const creatorEmail = req.user.email?.toLowerCase();
+
+    if (!creatorEmail) {
+      return res.status(401).json({
+        success: false,
+        message: "Authenticated user email is missing",
+      });
+    }
+
+    // Do not allow client to set ownership or MongoDB ID
+    delete eventData._id;
+    delete eventData.creatorEmail;
+
+    const newEvent = {
+      ...eventData,
+      creatorEmail,
+      createdAt: new Date(),
+    };
+
     const result = await app.locals.db
       .collection("events")
-      .insertOne(eventData);
+      .insertOne(newEvent);
 
     res.status(201).json({
       success: true,
       message: "Event created successfully",
       data: {
         _id: result.insertedId,
-        ...eventData,
+        ...newEvent,
       },
     });
   } catch (error) {
@@ -499,6 +520,15 @@ app.get("/my-events", async (req, res) => {
       message: "Failed to fetch my events",
     });
   }
+});
+
+// Protected test route
+app.get("/protected-test", verifyToken, (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "JWT verified successfully",
+    user: req.user,
+  });
 });
 
 
