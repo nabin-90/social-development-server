@@ -1,5 +1,28 @@
+const EVENT_TYPES = [
+  "Cleanup",
+  "Plantation",
+  "Donation",
+  "Education",
+  "Health",
+  "Community Support",
+];
+
 const isValidString = (value) => {
   return typeof value === "string" && value.trim().length > 0;
+};
+
+const isValidImageURL = (value) => {
+  if (!isValidString(value)) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 };
 
 const validateEvent = (eventData) => {
@@ -24,44 +47,52 @@ const validateEvent = (eventData) => {
     errors.location = "Event location is required";
   }
 
+  // Validate thumbnail
+  if (!isValidString(eventData.thumbnail)) {
+    errors.thumbnail = "Thumbnail image URL is required";
+  } else if (!isValidImageURL(eventData.thumbnail.trim())) {
+    errors.thumbnail = "Please provide a valid image URL";
+  }
 
   // Validate event date
-if (!isValidString(eventData.eventDate)) {
-  errors.eventDate = "Event date is required";
-} else {
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-
-  if (!dateRegex.test(eventData.eventDate)) {
-    errors.eventDate = "Date must be in YYYY-MM-DD format";
+  if (!isValidString(eventData.eventDate)) {
+    errors.eventDate = "Event date is required";
   } else {
-    const [year, month, day] = eventData.eventDate
-      .split("-")
-      .map(Number);
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
-    const eventDate = new Date(year, month - 1, day);
-
-    const isRealDate =
-      eventDate.getFullYear() === year &&
-      eventDate.getMonth() === month - 1 &&
-      eventDate.getDate() === day;
-
-    if (!isRealDate) {
-      errors.eventDate = "Invalid calendar date";
+    if (!dateRegex.test(eventData.eventDate)) {
+      errors.eventDate = "Date must be in YYYY-MM-DD format";
     } else {
-      const today = new Date();
+      const [year, month, day] = eventData.eventDate.split("-").map(Number);
 
-      today.setHours(0, 0, 0, 0);
+      const eventDate = new Date(year, month - 1, day);
 
-      if (eventDate < today) {
-        errors.eventDate = "Event date cannot be in the past";
+      const isRealDate =
+        eventDate.getFullYear() === year &&
+        eventDate.getMonth() === month - 1 &&
+        eventDate.getDate() === day;
+
+      if (!isRealDate) {
+        errors.eventDate = "Invalid calendar date";
+      } else {
+        const todayInBangladesh = new Date(
+          new Date().toLocaleDateString("en-CA", {
+            timeZone: "Asia/Dhaka",
+          }),
+        );
+
+        if (eventDate <= todayInBangladesh) {
+          errors.eventDate = "Event date cannot be in the past";
+        }
       }
     }
   }
-}
 
   // Validate event type
   if (!isValidString(eventData.type)) {
     errors.type = "Event type is required";
+  } else if (!EVENT_TYPES.includes(eventData.type.trim())) {
+    errors.type = "Invalid event type";
   }
 
   return {

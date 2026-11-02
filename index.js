@@ -101,7 +101,7 @@ app.get("/events", async (req, res) => {
   }
 });
 
-// Create a new event
+
 // Create an event (JWT protected)
 app.post("/events", verifyToken, async (req, res) => {
   try {
@@ -284,7 +284,7 @@ app.put("/events/:id", verifyToken, async (req, res) => {
   }
 });
 
-// Delete an event 
+// Delete an event
 app.delete("/events/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -458,8 +458,13 @@ app.get("/joined-events", verifyToken, async (req, res) => {
           $unwind: "$event",
         },
         {
+          $replaceRoot: {
+            newRoot: "$event",
+          },
+        },
+        {
           $sort: {
-            "event.eventDate": 1,
+            eventDate: 1,
           },
         },
       ])
