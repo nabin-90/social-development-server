@@ -34,10 +34,9 @@ app.get("/", (req, res) => {
   res.send("Social Development Events Server is Running!");
 });
 
-// Get all events
+
 
 // Get all upcoming events
-
 app.get("/events", async (req, res) => {
   try {
     // Get today's date in Bangladesh timezone
@@ -535,46 +534,56 @@ app.get("/protected-test", verifyToken, (req, res) => {
 // Start server
 const client = new MongoClient(process.env.MONGODB_URI);
 
-async function startServer() {
-  try {
-    await client.connect();
+let db;
+let auth;
+let dbReady;
 
-    await client.db("admin").command({ ping: 1 });
+async function connectDB() {
+  if (!dbReady) {
+    dbReady = (async () => {
+      await client.connect();
+      await client.db("admin").command({ ping: 1 });
 
-    console.log("MongoDB Connected Successfully!");
+      console.log("MongoDB Connected Successfully!");
 
-    const db = client.db(process.env.DB_NAME);
+      db = client.db(process.env.DB_NAME);
 
-    // Prevent duplicate event joins
-    await db.collection("joinedEvents").createIndex(
-      {
-        eventId: 1,
-        userEmail: 1,
-      },
-      {
-        unique: true,
-      },
-    );
+      await db.collection("joinedEvents").createIndex(
+        {
+          eventId: 1,
+          userEmail: 1,
+        },
+        {
+          unique: true,
+        },
+      );
 
-    console.log("Joined Events Unique Index Created!");
+      console.log("Joined Events Unique Index Created!");
 
-    app.locals.db = db;
+      app.locals.db = db;
 
-    // Initialize Better Auth
-    const auth = createAuth(db, client);
+      auth = createAuth(db, client);
 
-    // Mount Better Auth routes
-    app.all("/api/auth/{*any}", toNodeHandler(auth));
+      app.all("/api/auth/{*any}", toNodeHandler(auth));
 
-    console.log("Better Auth Initialized!");
-
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+      console.log("Better Auth Initialized!");
+    })().catch((error) => {
+      dbReady = null;
+      throw error;
     });
-  } catch (error) {
-    console.error("MongoDB Connection Failed:", error);
-    process.exit(1);
   }
+
+  return dbReady;
 }
 
-startServer();
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error("MongoDB Connection Failed:", error);
+    res.status(500).json({ message: "Database connection failed" });
+  }
+});
+
+export default app;
