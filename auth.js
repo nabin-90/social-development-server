@@ -1,4 +1,3 @@
-
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
 import { jwt } from "better-auth/plugins";
@@ -12,7 +11,10 @@ export const createAuth = (db, client) => {
     baseURL: process.env.BETTER_AUTH_URL,
     secret: process.env.BETTER_AUTH_SECRET,
 
-    trustedOrigins: ["http://localhost:3000"],
+    trustedOrigins: [
+      "http://localhost:3000",
+      "https://social-development-client.vercel.app",
+    ],
 
     emailAndPassword: {
       enabled: true,
@@ -29,8 +31,6 @@ export const createAuth = (db, client) => {
       },
     },
 
-    plugins: [
-      jwt(),
-    ],
+    plugins: [jwt()],
   });
 };
