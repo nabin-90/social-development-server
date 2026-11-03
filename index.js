@@ -32,6 +32,61 @@ app.use((req, res, next) => {
   express.json()(req, res, next);
 });
 
+// Start server
+const client = new MongoClient(process.env.MONGODB_URI);
+
+let db;
+let auth;
+let dbReady;
+
+async function connectDB() {
+  if (!dbReady) {
+    dbReady = (async () => {
+      await client.connect();
+      await client.db("admin").command({ ping: 1 });
+
+      console.log("MongoDB Connected Successfully!");
+
+      db = client.db(process.env.DB_NAME);
+
+      await db.collection("joinedEvents").createIndex(
+        {
+          eventId: 1,
+          userEmail: 1,
+        },
+        {
+          unique: true,
+        },
+      );
+
+      console.log("Joined Events Unique Index Created!");
+
+      app.locals.db = db;
+
+      auth = createAuth(db, client);
+
+      app.all("/api/auth/{*any}", toNodeHandler(auth));
+
+      console.log("Better Auth Initialized!");
+    })().catch((error) => {
+      dbReady = null;
+      throw error;
+    });
+  }
+
+  return dbReady;
+}
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error("MongoDB Connection Failed:", error);
+    res.status(500).json({ message: "Database connection failed" });
+  }
+});
+
 // Test API
 app.get("/", (req, res) => {
   res.send("Social Development Events Server is Running!");
@@ -534,59 +589,6 @@ app.get("/protected-test", verifyToken, (req, res) => {
   });
 });
 
-// Start server
-const client = new MongoClient(process.env.MONGODB_URI);
 
-let db;
-let auth;
-let dbReady;
-
-async function connectDB() {
-  if (!dbReady) {
-    dbReady = (async () => {
-      await client.connect();
-      await client.db("admin").command({ ping: 1 });
-
-      console.log("MongoDB Connected Successfully!");
-
-      db = client.db(process.env.DB_NAME);
-
-      await db.collection("joinedEvents").createIndex(
-        {
-          eventId: 1,
-          userEmail: 1,
-        },
-        {
-          unique: true,
-        },
-      );
-
-      console.log("Joined Events Unique Index Created!");
-
-      app.locals.db = db;
-
-      auth = createAuth(db, client);
-
-      app.all("/api/auth/{*any}", toNodeHandler(auth));
-
-      console.log("Better Auth Initialized!");
-    })().catch((error) => {
-      dbReady = null;
-      throw error;
-    });
-  }
-
-  return dbReady;
-}
-
-app.use(async (req, res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (error) {
-    console.error("MongoDB Connection Failed:", error);
-    res.status(500).json({ message: "Database connection failed" });
-  }
-});
 
 export default app;
