@@ -15,9 +15,12 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: [
+      "http://localhost:3000",
+      "https://social-development-client.vercel.app",
+    ],
     credentials: true,
-  }),
+  })
 );
 
 // Skip JSON parsing for Better Auth requests
