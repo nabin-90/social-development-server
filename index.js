@@ -23,7 +23,7 @@ app.use(
   })
 );
 
-// Skip JSON parsing for Better Auth requests
+
 app.use((req, res, next) => {
   if (req.path.startsWith("/api/auth")) {
     return next();
@@ -174,7 +174,7 @@ app.post("/events", verifyToken, async (req, res) => {
       });
     }
 
-    // Creator identity comes from verified JWT, not request body
+    // Creator identity 
     const creatorEmail = req.user.email?.toLowerCase();
 
     if (!creatorEmail) {
@@ -255,7 +255,7 @@ app.get("/events/:id", async (req, res) => {
   }
 });
 
-// Update an event (JWT protected, creator only)
+// Update an event 
 app.put("/events/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -396,7 +396,7 @@ app.delete("/events/:id", verifyToken, async (req, res) => {
   }
 });
 
-// Join an event (JWT protected)
+// Join an event 
 app.post("/events/:id/join", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -482,7 +482,7 @@ app.post("/events/:id/join", verifyToken, async (req, res) => {
   }
 });
 
-// Get joined events (JWT protected)
+// Get joined events 
 app.get("/joined-events", verifyToken, async (req, res) => {
   try {
     // Get authenticated user's email from JWT
@@ -543,7 +543,7 @@ app.get("/joined-events", verifyToken, async (req, res) => {
   }
 });
 
-// Get my events (JWT protected)
+// Get my events 
 app.get("/my-events", verifyToken, async (req, res) => {
   try {
     // Get authenticated user's email from JWT
